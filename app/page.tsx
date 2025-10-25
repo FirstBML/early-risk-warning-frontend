@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
-const API_BASE = 'https://easygoing-charm-production-707b.up.railway.app/api';
+const API_BASE = 'https://friendly-vitality-production.up.railway.app/api';
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
