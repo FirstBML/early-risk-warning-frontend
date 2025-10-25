@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, AlertTriangle, BarChart3, TrendingUp, Shield, Database, Globe, Moon, Sun, Zap, Users, RefreshCw, Download } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, TrendingUp, Shield, Database, Globe, Moon, Sun, Zap, Users, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://easygoing-charm-production-707b.up.railway.app/api';
 
@@ -14,6 +14,43 @@ const tabs = [
   { id: 'chains', label: 'Cross-Chain', icon: Globe },
   { id: 'metrics', label: 'Advanced', icon: Zap },
 ];
+
+// Pagination Component
+function Pagination({ currentPage, totalPages, onPageChange, isDark }: any) {
+  return (
+    <div className={`flex items-center justify-between mt-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+      <div className="text-sm">
+        Page {currentPage} of {totalPages}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded flex items-center gap-1 ${
+            currentPage === 1
+              ? 'opacity-50 cursor-not-allowed'
+              : isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+          }`}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded flex items-center gap-1 ${
+            currentPage === totalPages
+              ? 'opacity-50 cursor-not-allowed'
+              : isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+          }`}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function GaugeChart({ value, max = 100, label, isDark }: any) {
   const percentage = Math.min((value / max) * 100, 100);
@@ -233,25 +270,45 @@ function PositionsTab({ isDark }: any) {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 50;
 
   useEffect(() => {
-    const endpoint = filter === 'risky' ? '/positions/risky' : '/positions';
+    setLoading(true);
+    const endpoint = filter === 'risky' 
+      ? `/positions/risky?page=${currentPage}&page_size=${pageSize}` 
+      : `/positions?limit=${pageSize * currentPage}`;
+    
     fetch(`${API_BASE}${endpoint}`)
       .then(r => r.json())
       .then(data => {
-        const posArray = Array.isArray(data) ? data : (data.positions || data.data || []);
-        console.log('Positions Data:', posArray);
-        setPositions(posArray);
+        console.log('Positions Data:', data);
+        
+        if (filter === 'risky' && data.pagination) {
+          setPositions(data.positions || []);
+          setTotalPages(data.pagination.total_pages);
+        } else {
+          const posArray = Array.isArray(data) ? data : (data.positions || data.data || []);
+          setPositions(posArray.slice((currentPage - 1) * pageSize, currentPage * pageSize));
+          setTotalPages(Math.ceil(posArray.length / pageSize));
+        }
         setLoading(false);
       })
       .catch(() => {
         setPositions([]);
         setLoading(false);
       });
-  }, [filter]);
+  }, [filter, currentPage]);
 
   const columns = [
-    { key: 'borrower_address', label: 'User', render: (val: string) => val ? `${val.slice(0, 6)}...${val.slice(-4)}` : 'N/A' },
+    { 
+      key: 'borrower_address', 
+      label: 'User', 
+      render: (val: string) => val ? (
+        <span title={val}>{val.slice(0, 6)}...{val.slice(-4)}</span>
+      ) : 'N/A' 
+    },
     { key: 'chain', label: 'Chain' },
     { key: 'token_symbol', label: 'Asset' },
     { 
@@ -268,7 +325,7 @@ function PositionsTab({ isDark }: any) {
       key: 'debt_usd', 
       label: 'Debt', 
       render: (val: number) => {
-        if (!val) return '$0.00';
+        if (!val || val === 0) return '-';
         if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`;
         if (val >= 1e3) return `$${(val / 1e3).toFixed(2)}K`;
         return `$${val.toFixed(2)}`;
@@ -278,7 +335,8 @@ function PositionsTab({ isDark }: any) {
       key: 'enhanced_health_factor', 
       label: 'Health Factor', 
       render: (val: number) => {
-        if (!val) return 'N/A';
+        if (!val || val === 0) return <span className="text-gray-400">N/A</span>;
+        if (val > 999) return <span className="text-green-600">∞</span>;
         const color = val < 1.1 ? 'text-red-600' : val < 1.5 ? 'text-yellow-600' : 'text-green-600';
         return <span className={color}>{val.toFixed(2)}</span>;
       }
@@ -288,10 +346,10 @@ function PositionsTab({ isDark }: any) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}>
+        <button onClick={() => { setFilter('all'); setCurrentPage(1); }} className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}>
           All Positions
         </button>
-        <button onClick={() => setFilter('risky')} className={`px-4 py-2 rounded ${filter === 'risky' ? 'bg-red-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}>
+        <button onClick={() => { setFilter('risky'); setCurrentPage(1); }} className={`px-4 py-2 rounded ${filter === 'risky' ? 'bg-red-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}>
           Risky Positions
         </button>
       </div>
@@ -300,7 +358,8 @@ function PositionsTab({ isDark }: any) {
         <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           {filter === 'risky' ? 'Risky Positions' : 'All Positions'}
         </h2>
-        <DataTable data={positions.slice(0, 50)} columns={columns} loading={loading} isDark={isDark} />
+        <DataTable data={positions} columns={columns} loading={loading} isDark={isDark} />
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
       </div>
     </div>
   );
@@ -309,13 +368,15 @@ function PositionsTab({ isDark }: any) {
 function ReservesTab({ isDark }: any) {
   const [reserves, setReserves] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   useEffect(() => {
-    fetch(`${API_BASE}/reserves/rpc`)
+    fetch(`${API_BASE}/reserves/rpc?limit=500`)
       .then(r => r.json())
       .then(data => {
         const resArray = Array.isArray(data) ? data : (data.reserves || data.data || []);
-        console.log('Reserves Data:', resArray);
+        console.log('Reserves Data Sample:', resArray[0]);
         setReserves(resArray);
         setLoading(false);
       })
@@ -326,19 +387,60 @@ function ReservesTab({ isDark }: any) {
       });
   }, []);
 
+  const paginatedReserves = reserves.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(reserves.length / pageSize);
+
   const columns = [
     { key: 'chain', label: 'Chain' },
-    { key: 'token_symbol', label: 'Asset' },
-    { key: 'supply_apy', label: 'Supply APY', render: (val: number) => val ? `${(val * 100).toFixed(2)}%` : '0.00%' },
-    { key: 'borrow_apy', label: 'Borrow APY', render: (val: number) => val ? `${(val * 100).toFixed(2)}%` : '0.00%' },
-    { key: 'ltv', label: 'LTV', render: (val: number) => val ? `${(val * 100).toFixed(0)}%` : '0%' },
-    { key: 'liquidation_threshold', label: 'Liq. Threshold', render: (val: number) => val ? `${(val * 100).toFixed(0)}%` : '0%' },
+    { 
+      key: 'token_symbol', 
+      label: 'Asset',
+      render: (val: string) => val && val !== 'UNKNOWN' ? val : <span className="text-gray-400">Unknown</span>
+    },
+    { 
+      key: 'supply_apy', 
+      label: 'Supply APY', 
+      render: (val: number) => {
+        if (!val || val === 0) return '0.00%';
+        // API returns decimal (0.0-1.0), convert to percentage
+        const percentage = val < 1 ? val * 100 : val;
+        return `${percentage.toFixed(2)}%`;
+      }
+    },
+    { 
+      key: 'borrow_apy', 
+      label: 'Borrow APY', 
+      render: (val: number) => {
+        if (!val || val === 0) return '0.00%';
+        const percentage = val < 1 ? val * 100 : val;
+        return `${percentage.toFixed(2)}%`;
+      }
+    },
+    { 
+      key: 'ltv', 
+      label: 'LTV', 
+      render: (val: number) => {
+        if (!val || val === 0) return '0%';
+        const percentage = val < 1 ? val * 100 : val;
+        return `${percentage.toFixed(0)}%`;
+      }
+    },
+    { 
+      key: 'liquidation_threshold', 
+      label: 'Liq. Threshold', 
+      render: (val: number) => {
+        if (!val || val === 0) return '0%';
+        const percentage = val < 1 ? val * 100 : val;
+        return `${percentage.toFixed(0)}%`;
+      }
+    },
   ];
 
   return (
     <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
       <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Assets</h2>
-      <DataTable data={reserves} columns={columns} loading={loading} isDark={isDark} />
+      <DataTable data={paginatedReserves} columns={columns} loading={loading} isDark={isDark} />
+      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
     </div>
   );
 }
@@ -347,10 +449,12 @@ function LiquidationsTab({ isDark }: any) {
   const [liquidations, setLiquidations] = useState<any[]>([]);
   const [trends, setTrends] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_BASE}/liquidation-history`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/liquidation-history?limit=500`).then(r => r.json()).catch(() => []),
       fetch(`${API_BASE}/liquidation_trends`).then(r => r.json()).catch(() => null),
     ]).then(([liqData, trendsData]) => {
       const liqArray = Array.isArray(liqData) ? liqData : (liqData.history || liqData.data || []);
@@ -360,6 +464,9 @@ function LiquidationsTab({ isDark }: any) {
       setLoading(false);
     });
   }, []);
+
+  const paginatedLiquidations = liquidations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(liquidations.length / pageSize);
 
   const columns = [
     { key: 'chain', label: 'Chain' },
@@ -402,7 +509,8 @@ function LiquidationsTab({ isDark }: any) {
 
       <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
         <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Recent Liquidations</h2>
-        <DataTable data={liquidations.slice(0, 20)} columns={columns} loading={loading} isDark={isDark} />
+        <DataTable data={paginatedLiquidations} columns={columns} loading={loading} isDark={isDark} />
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
       </div>
     </div>
   );
@@ -432,20 +540,23 @@ function RiskTab({ isDark }: any) {
     const categories: any = { SAFE: 0, LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
     positions.forEach((pos: any) => {
       const hf = pos.enhanced_health_factor || 0;
-      if (hf >= 2) categories.SAFE++;
+      if (hf >= 2 || hf === 0) categories.SAFE++;
       else if (hf >= 1.5) categories.LOW++;
       else if (hf >= 1.3) categories.MEDIUM++;
       else if (hf >= 1.1) categories.HIGH++;
       else categories.CRITICAL++;
     });
-    return Object.entries(categories).map(([name, value]) => ({ name, value, percentage: (Number(value) / positions.length) * 100 }));
+    return Object.entries(categories).map(([name, value]) => ({ 
+      name, 
+      value, 
+      percentage: positions.length > 0 ? (Number(value) / positions.length) * 100 : 0 
+    }));
   }, [positions]);
 
   return (
     <div className="space-y-6">
       <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Position Risk Categories</h2>
-        {loading ? (
+        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Position Risk Categories</h2>{loading ? (
           <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className={`h-8 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
         ) : (
           <div className="space-y-4">
@@ -477,57 +588,292 @@ function RiskTab({ isDark }: any) {
             ))}
           </div>
         ) : (
-          <div className={`text-center py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-            No risk signals found
+          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No risk signals detected</p>
+        )}
+      </div>
+
+      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Risk Alerts Feed</h2>
+        {loading ? (
+          <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className={`h-16 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+        ) : alerts.length > 0 ? (
+          <div className="space-y-3">
+            {alerts.slice(0, 10).map((alert: any, idx: number) => (
+              <div key={idx} className={`border-l-4 border-red-500 ${isDark ? 'bg-red-900/20' : 'bg-red-50'} p-4 rounded`}>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className={`font-medium ${isDark ? 'text-red-400' : 'text-red-900'}`}>{alert.severity || 'ALERT'}</div>
+                    <div className={`text-sm ${isDark ? 'text-red-300' : 'text-red-700'}`}>{alert.message || 'No details available'}</div>
+                    {alert.timestamp && (
+                      <div className={`text-xs ${isDark ? 'text-red-500' : 'text-red-600'} mt-1`}>{new Date(alert.timestamp).toLocaleString()}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        ) : (
+          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No alerts at this time</p>
         )}
       </div>
     </div>
   );
 }
 
-export default function Dashboard() {
+function ChainsTab({ isDark }: any) {
+  const [chains, setChains] = useState<any[]>([]);
+  const [comparison, setComparison] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_BASE}/chains/available`).then(r => r.json()).catch(() => ({ chains: [] })),
+      fetch(`${API_BASE}/crosschain_risk_comparison`).then(r => r.json()).catch(() => ({ comparison: [] })),
+    ]).then(([chainsData, compData]) => {
+      console.log('Chains API Response:', chainsData);
+      console.log('Comparison API Response:', compData);
+      
+      // Fix: chains endpoint returns {chains: [...], details: [...]}
+      const chainArray = chainsData.chains || [];
+      const compArray = compData.comparison || [];
+      
+      setChains(chainArray);
+      setComparison(compArray);
+      setLoading(false);
+    });
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Available Chains</h2>
+        {loading ? (
+          <div className={`h-16 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>
+        ) : chains.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {chains.map((chain: any, idx: number) => (
+              <span key={idx} className={`px-4 py-2 ${isDark ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'} rounded-full font-medium`}>
+                {typeof chain === 'string' ? chain : chain.name || chain.chain}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No chains available</p>
+        )}
+      </div>
+
+      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Cross-Chain Risk Comparison</h2>
+        {loading ? (
+          <div className="space-y-2">{[1, 2].map(i => <div key={i} className={`h-24 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+        ) : comparison.length > 0 ? (
+          <div className="space-y-4">
+            {comparison.map((item: any, idx: number) => (
+              <div key={idx} className={`border ${isDark ? 'border-gray-700' : 'border-gray-200'} rounded-lg p-4`}>
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.chain}</h3>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{item.total_positions} positions</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    item.safety_score > 80 ? 'bg-green-100 text-green-800' :
+                    item.safety_score > 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    Safety: {item.safety_score?.toFixed(0) || 'N/A'}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Avg Health Factor</div>
+                    <div className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {item.average_health_factor?.toFixed(2) || 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>TVL</div>
+                    <div className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      ${item.total_collateral_usd ? (item.total_collateral_usd / 1e6).toFixed(2) : '0'}M
+                    </div>
+                  </div>
+                  <div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Debt Ratio</div>
+                    <div className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {item.debt_collateral_ratio ? `${(item.debt_collateral_ratio * 100).toFixed(1)}%` : '0%'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>7d Liquidations</div>
+                    <div className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {item.liquidations_7d || 0}
+                    </div>
+                  </div>
+                </div>
+                
+                {item.top_collateral_tokens && item.top_collateral_tokens.length > 0 && (
+                  <div className="mt-3">
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mb-2`}>Top Assets:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {item.top_collateral_tokens.map((token: string, tidx: number) => (
+                        <span key={tidx} className={`px-2 py-1 text-xs rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                          {token}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No comparison data available. Try refreshing the data from the API.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricsTab({ isDark }: { isDark: boolean }) {
+  const [metrics, setMetrics] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
+  useEffect(() => {
+    fetch(`${API_BASE}/reserve_risk_metrics`)
+      .then(r => r.json())
+      .then((data) => {
+        console.log('Metrics API Response:', data);
+        const metricsArray = data.metrics || [];
+        setMetrics(metricsArray);
+        setLoading(false);
+      })
+      .catch((error: Error) => {
+        console.error('Metrics Error:', error);
+        setMetrics([]);
+        setLoading(false);
+      });
+  }, []);
+
+  const paginatedMetrics = metrics.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(metrics.length / pageSize);
+
+  const columns = [
+    { key: 'token_symbol', label: 'Asset' },
+    { key: 'chain', label: 'Chain' },
+    { key: 'utilization_rate', label: 'Utilization', render: (val: number) => val ? `${(val * 100).toFixed(1)}%` : '0%' },
+    { key: 'total_exposure_usd', label: 'Exposure', render: (val: number) => val ? `$${(val / 1e6).toFixed(2)}M` : '$0' },
+    { key: 'risk_score', label: 'Risk Score', render: (val: number) => val || 0 },
+    { 
+      key: 'risk_level', 
+      label: 'Risk Level',
+      render: (val: string) => (
+        <span className={`px-2 py-1 rounded text-xs font-medium ${
+          val === 'HIGH' ? 'bg-red-100 text-red-800' :
+          val === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+        }`}>
+          {val || 'LOW'}
+        </span>
+      )
+    },
+  ];
+
+  return (
+    <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+      <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Risk Metrics</h2>
+      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-4`}>
+        Advanced risk analysis for reserve assets
+      </p>
+      {metrics.length === 0 && !loading ? (
+        <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No metrics available. Try refreshing the data from the API.</p>
+      ) : (
+        <>
+          <DataTable data={paginatedMetrics} columns={columns} loading={loading} isDark={isDark} />
+          {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function DeFiDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [isDark, setIsDark] = useState(false);
 
-  const toggleTheme = () => {
-    setIsDark(prev => !prev);
-    document.documentElement.classList.toggle('dark', !isDark);
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'overview': return <OverviewTab isDark={isDark} />;
+      case 'positions': return <PositionsTab isDark={isDark} />;
+      case 'reserves': return <ReservesTab isDark={isDark} />;
+      case 'liquidations': return <LiquidationsTab isDark={isDark} />;
+      case 'risk': return <RiskTab isDark={isDark} />;
+      case 'chains': return <ChainsTab isDark={isDark} />;
+      case 'metrics': return <MetricsTab isDark={isDark} />;
+      default: return <OverviewTab isDark={isDark} />;
+    }
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'} transition-all`}>
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className={`text-3xl font-extrabold ${isDark ? 'text-white' : 'text-gray-900'}`}>Dashboard</h1>
-          <button onClick={toggleTheme} className={`px-4 py-2 rounded ${isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-200 text-gray-900'}`}>
-            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+    <div className={`min-h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      <header className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} shadow-sm border-b`}>
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>DeFi Risk Dashboard</h1>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Real-time monitoring and analysis</p>
+          </div>
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className={`p-2 rounded-lg ${isDark ? 'bg-gray-700 text-yellow-400 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'} transition-colors`}
+            aria-label="Toggle dark mode"
+          >
+            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
         </div>
+      </header>
 
-        <div className="flex space-x-4 mb-8">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-2
-                ${activeTab === tab.id ? (isDark ? 'bg-gray-700 text-white' : 'bg-blue-600 text-white') : (isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-900')}`}
-            >
-              <tab.icon className="w-5 h-5" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
+      <nav className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} border-b`}>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex space-x-1 overflow-x-auto">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-blue-600 text-blue-600'
+                      : isDark 
+                        ? 'border-transparent text-gray-400 hover:text-gray-300'
+                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+      </nav>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          {activeTab === 'overview' && <OverviewTab isDark={isDark} />}
-          {activeTab === 'positions' && <PositionsTab isDark={isDark} />}
-          {activeTab === 'reserves' && <ReservesTab isDark={isDark} />}
-          {activeTab === 'liquidations' && <LiquidationsTab isDark={isDark} />}
-          {activeTab === 'risk' && <RiskTab isDark={isDark} />}
-          {/* Add Metrics tab content here when available */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {renderContent()}
+      </main>
+
+      <footer className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'} border-t mt-12`}>
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center text-sm">
+            <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+              DeFi Risk Dashboard © 2025
+            </p>
+            <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+              Last updated: {new Date().toLocaleString()}
+            </p>
+          </div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
