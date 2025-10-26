@@ -40,3 +40,23 @@ export interface CrossChainRiskData {
   health_factor?: number;
   risk_level?: 'LOW' | 'MEDIUM' | 'HIGH';
 }
+
+export interface LiquidationTrendsResponse {
+  chain_distribution: ChainDistribution[];
+  time_series: LiquidationTrend[];
+  total_count: number;
+  total_volume: number;
+}
+
+export interface ChainDistribution {
+  chain: string;
+  count: number;
+  volume: number;
+}
+
+export interface LiquidationTrend {
+  chain: string;
+  count: number;
+  volume: number;
+  timestamp: string;
+}
