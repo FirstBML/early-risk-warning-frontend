@@ -1,19 +1,31 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { apiService } from "@/lib/api-service"
+import { apiService } from "@/lib/api"
+import { Position } from "@/types/api"
 import { getRiskCategory, getRiskColor } from "@/lib/formatters"
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
+} from 'recharts'
 
 export function RiskCategoriesPie() {
-  const [positions, setPositions] = useState<any[]>([])
+  const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const result = await apiService.getPositions()
+        const result = await apiService.getPositions({
+          borrowerAddress: '', // Empty string to get all positions
+          limit: 1000,        // Large enough limit to get meaningful data
+          offset: 0
+        })
         setPositions(result)
       } catch (error) {
         console.error("[v0] Failed to fetch positions:", error)
@@ -27,50 +39,41 @@ export function RiskCategoriesPie() {
     return () => clearInterval(interval)
   }, [])
 
-  const chartData = useMemo(() => {
-    const categories: Record<string, number> = {}
+  const riskDistribution = positions.reduce((acc: Record<string, number>, pos) => {
+    const category = getRiskCategory(pos.healthfactor)
+    acc[category] = (acc[category] || 0) + 1
+    return acc
+  }, {})
 
-    positions.forEach((pos) => {
-      const category = pos.risk_category || getRiskCategory(pos.enhanced_health_factor || 0)
-      categories[category] = (categories[category] || 0) + 1
-    })
-
-    return Object.entries(categories).map(([name, value]) => ({
-      name,
-      value,
-      color: getRiskColor(name),
-    }))
-  }, [positions])
+  const chartData = Object.entries(riskDistribution).map(([name, value]) => ({
+    name,
+    value
+  }))
 
   return (
     <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">Position Risk Categories</h3>
+      <h3 className="text-lg font-semibold mb-4">Risk Category Distribution</h3>
       {loading ? (
-        <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading...</div>
+        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+          Loading...
+        </div>
       ) : (
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={chartData}
+              dataKey="value"
+              nameKey="name"
               cx="50%"
               cy="50%"
-              labelLine={false}
-              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-              outerRadius={80}
-              fill="#8884d8"
-              dataKey="value"
+              outerRadius={100}
+              label={(entry) => `${entry.name}: ${entry.value}`}
             >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+              {chartData.map((entry) => (
+                <Cell key={entry.name} fill={getRiskColor(entry.name)} />
               ))}
             </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--color-card)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "8px",
-              }}
-            />
+            <Tooltip />
             <Legend />
           </PieChart>
         </ResponsiveContainer>
