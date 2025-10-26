@@ -1,5 +1,8 @@
+"use client";
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Activity, AlertTriangle, BarChart3, TrendingUp, Shield, Database, Globe, Moon, Sun, Zap, Users, RefreshCw, ChevronLeft, ChevronRight, Lock, Wallet } from 'lucide-react';
+import { StatCard } from './components/StatCard';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://easygoing-charm-production-707b.up.railway.app/api';
 
@@ -120,7 +123,14 @@ function ProgressBar({ value, max = 100, label, isDark }: any) {
   );
 }
 
-function BarChart({ data, xKey, yKey, isDark }: any) {
+interface BarChartProps {
+  data: Array<Record<string, any>>;
+  xKey: string;
+  yKey: string;
+  isDark: boolean;
+}
+
+function BarChart({ data, xKey, yKey, isDark }: BarChartProps) {
   if (!data || data.length === 0) return null;
   const maxValue = Math.max(...data.map((d: any) => d[yKey] || 0));
   
@@ -135,30 +145,14 @@ function BarChart({ data, xKey, yKey, isDark }: any) {
               <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>{item[yKey]}</span>
             </div>
             <div className={`w-full h-2 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
-              <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+              <div 
+                className="h-full bg-blue-600 rounded-full transition-all duration-500" 
+                style={{ width: `${percentage}%` }} 
+              />
             </div>
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function StatCard({ title, value, trend, loading, isDark, icon: Icon }: any) {
-  return (
-    <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{title}</h3>
-        {Icon && <Icon className={`h-5 w-5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />}
-      </div>
-      {loading ? (
-        <div className={`h-8 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>
-      ) : (
-        <>
-          <div className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{value}</div>
-          {trend && <div className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-1`}>{trend}</div>}
-        </>
-      )}
     </div>
   );
 }
@@ -272,7 +266,7 @@ function OverviewTab({ isDark }: any) {
           <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Risk Distribution</h3>
           {health?.position_insights?.risk_distribution && (
             <BarChart 
-              data={Object.entries(health.position_insights.risk_distribution).map(([k, v]) => ({ category: k, count: v }))}
+              data={Object.entries(health.position_insights.risk_distribution).map(([k, v]) => ({ category: k, count: v }))
               xKey="category" yKey="count" isDark={isDark}
             />
           )}
