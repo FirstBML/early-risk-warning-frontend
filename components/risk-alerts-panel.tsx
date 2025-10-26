@@ -6,24 +6,16 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { apiService } from "@/lib/api-service"
+import { apiService, type RiskAlert } from "@/lib/api-service"
 import { truncateAddress } from "@/lib/utils-defi"
 import { useRelativeTime } from "@/hooks/use-relative-time"
-
-interface Alert {
-  id: string
-  severity: string
-  message: string
-  borroweraddress?: string
-  timestamp: string
-}
 
 function AlertCard({
   alert,
   onDismiss,
   onClick,
 }: {
-  alert: Alert
+  alert: RiskAlert
   onDismiss: () => void
   onClick: () => void
 }) {
@@ -79,10 +71,12 @@ function AlertCard({
               </span>
             </div>
             <p className="text-sm leading-relaxed">{alert.message}</p>
-            {alert.borroweraddress && (
+            {(alert.borroweraddress || alert.borrower_address) && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Borrower:</span>
-                <span className="font-mono">{truncateAddress(alert.borroweraddress)}</span>
+                <span className="font-mono">
+                  {truncateAddress(alert.borroweraddress || alert.borrower_address || '')}
+                </span>
               </div>
             )}
           </div>
@@ -104,7 +98,7 @@ function AlertCard({
 }
 
 export function RiskAlertsPanel({ onBorrowerClick }: { onBorrowerClick?: (address: string) => void }) {
-  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [alerts, setAlerts] = useState<RiskAlert[]>([])
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [severityFilter, setSeverityFilter] = useState("ALL")
   const [loading, setLoading] = useState(true)
@@ -122,7 +116,7 @@ export function RiskAlertsPanel({ onBorrowerClick }: { onBorrowerClick?: (addres
     }
 
     fetchAlerts()
-    const interval = setInterval(fetchAlerts, 30000) // Refresh every 30s
+    const interval = setInterval(fetchAlerts, 30000)
     return () => clearInterval(interval)
   }, [severityFilter])
 
@@ -132,9 +126,10 @@ export function RiskAlertsPanel({ onBorrowerClick }: { onBorrowerClick?: (addres
     setDismissedIds((prev) => new Set(prev).add(id))
   }
 
-  const handleAlertClick = (alert: Alert) => {
-    if (alert.borroweraddress && onBorrowerClick) {
-      onBorrowerClick(alert.borroweraddress)
+  const handleAlertClick = (alert: RiskAlert) => {
+    const address = alert.borroweraddress || alert.borrower_address
+    if (address && onBorrowerClick) {
+      onBorrowerClick(address)
     }
   }
 

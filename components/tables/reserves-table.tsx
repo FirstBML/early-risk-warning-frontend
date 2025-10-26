@@ -5,18 +5,21 @@ import { Card } from "@/components/ui/card"
 import { DataTable } from "./data-table"
 import { apiService } from "@/lib/api-service"
 import { formatUSD, formatPercentage } from "@/lib/formatters"
+import { Reserve } from "@/types/api"
 
 export function ReservesTable() {
-  const [reserves, setReserves] = useState<any[]>([])
+  const [reserves, setReserves] = useState<Reserve[]>([])
   const [loading, setLoading] = useState(true)
+  const [chainFilter, setChainFilter] = useState<string[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const result = await apiService.getReserves()
-        setReserves(result)
+        const response = await apiService.getReserves()
+        setReserves(Array.isArray(response) ? response : [])
       } catch (error) {
         console.error("[v0] Failed to fetch reserves:", error)
+        setReserves([])
       } finally {
         setLoading(false)
       }
@@ -82,10 +85,17 @@ export function ReservesTable() {
     <Card className="p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Reserve Metrics</h3>
-        <p className="text-sm text-muted-foreground">Asset reserves across all chains</p>
+        <p className="text-sm text-muted-foreground">
+          Asset reserves across all chains ({reserves.length})
+        </p>
       </div>
 
-      <DataTable columns={columns} data={reserves} loading={loading} exportFilename="reserves" />
+      <DataTable 
+        columns={columns} 
+        data={reserves} 
+        loading={loading} 
+        exportFilename="reserves" 
+      />
     </Card>
   )
 }

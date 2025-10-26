@@ -1,15 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { apiService, type LiquidationEvent } from "@/lib/api-service"
 import { Card } from "@/components/ui/card"
 import { DataTable } from "./data-table"
-import { apiService } from "@/lib/api-service"
 import { formatUSD, formatNumber } from "@/lib/formatters"
 import { truncateAddress } from "@/lib/utils-defi"
 import { ExternalLink } from "lucide-react"
 
 export function LiquidationHistoryTable() {
-  const [liquidations, setLiquidations] = useState<any[]>([])
+  const [liquidations, setLiquidations] = useState<LiquidationEvent[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function LiquidationHistoryTable() {
     }
 
     fetchData()
-    const interval = setInterval(fetchData, 60000)
+    const interval = setInterval(fetchData, 60000) // Refresh every minute
     return () => clearInterval(interval)
   }, [])
 

@@ -4,19 +4,10 @@ import { useEffect, useState } from "react"
 import { Coins, FileText, BarChart3, Heart, AlertTriangle, Activity } from "lucide-react"
 import { KPICard } from "./kpi-card"
 import { HealthGauge } from "./health-gauge"
-import { apiService } from "@/lib/api-service"
-
-interface ProtocolData {
-  total_collateral_usd: number
-  total_debt_usd: number
-  protocol_ltv: number
-  average_health_factor: number
-  at_risk_value_usd: number
-  at_risk_percentage: number
-}
+import { apiService, type ProtocolRiskSummary } from "@/lib/api-service"
 
 export function ProtocolOverview() {
-  const [data, setData] = useState<ProtocolData | null>(null)
+  const [data, setData] = useState<ProtocolRiskSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -38,7 +29,9 @@ export function ProtocolOverview() {
     return () => clearInterval(interval)
   }, [])
 
-  const protocolHealthScore = data ? Math.min(100, Math.max(0, (data.average_health_factor / 3) * 100)) : 0
+  const protocolHealthScore = data?.average_health_factor 
+    ? Math.min(100, Math.max(0, (data.average_health_factor / 3) * 100)) 
+    : 0
 
   return (
     <div className="space-y-6">
@@ -56,7 +49,13 @@ export function ProtocolOverview() {
           loading={loading}
         />
 
-        <KPICard title="Total Debt" value={data?.total_debt_usd || 0} type="usd" icon={FileText} loading={loading} />
+        <KPICard 
+          title="Total Debt" 
+          value={data?.total_debt_usd || 0} 
+          type="usd" 
+          icon={FileText} 
+          loading={loading} 
+        />
 
         <KPICard
           title="Protocol LTV Ratio"

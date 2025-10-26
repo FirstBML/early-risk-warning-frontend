@@ -47,11 +47,18 @@ export interface ChainDistribution {
 
 export interface Reserve {
   token_symbol: string;
+  chain: string;
   supply_apy: number;
   borrow_apy: number;
   total_supply: number;
   total_borrow: number;
   utilization_rate: number;
+  ltv: number;
+  liquidation_threshold: number;
+  liquidation_bonus: number;
+  price_usd: number;
+  is_active: boolean;
+  is_frozen: boolean;
 }
 
 export interface ReserveWithUtilization extends Reserve {
