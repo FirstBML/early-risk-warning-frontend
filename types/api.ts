@@ -32,3 +32,11 @@ export interface Reserve {
   total_borrow: number;
   utilization?: number;
 }
+
+export interface CrossChainRiskData {
+  chain: string;
+  total_collateral_usd: number;
+  total_debt_usd: number;
+  health_factor?: number;
+  risk_level?: 'LOW' | 'MEDIUM' | 'HIGH';
+}

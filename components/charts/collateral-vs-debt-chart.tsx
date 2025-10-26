@@ -1,27 +1,43 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { Card } from "@/components/ui/card"
-import { apiService } from "@/lib/api-service"
+import { apiService } from "@/lib/api"
+import { CrossChainRiskData } from "@/types/api"
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend 
+} from 'recharts'
 import { formatUSD } from "@/lib/formatters"
 
+interface ChartData {
+  chain: string;
+  collateral: number;
+  debt: number;
+}
+
 export function CollateralVsDebtChart() {
-  const [data, setData] = useState<any[]>([])
+  const [data, setData] = useState<ChartData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const result = await apiService.getCrossChainRiskComparison()
-        const chartData = result.map((item: any) => ({
+        const chartData = result.map(item => ({
           chain: item.chain,
           collateral: item.total_collateral_usd,
-          debt: item.total_debt_usd,
+          debt: item.total_debt_usd
         }))
         setData(chartData)
       } catch (error) {
-        console.error("[v0] Failed to fetch cross-chain data:", error)
+        console.error("Failed to fetch cross-chain data:", error)
       } finally {
         setLoading(false)
       }
@@ -49,7 +65,7 @@ export function CollateralVsDebtChart() {
                 border: "1px solid var(--color-border)",
                 borderRadius: "8px",
               }}
-              formatter={(value: any) => formatUSD(value)}
+              formatter={(value: number) => [formatUSD(value), ""]}
             />
             <Legend />
             <Bar dataKey="collateral" fill="var(--color-risk-safe)" name="Collateral" />

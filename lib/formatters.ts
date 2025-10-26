@@ -1,21 +1,15 @@
-export function formatUSD(value: number | null | undefined, decimals = 2): string {
-  if (value === null || value === undefined || isNaN(value)) return '$0.00'
-
-  if (value >= 1e9) {
-    return `$${(value / 1e9).toFixed(decimals)}B`
-  } else if (value >= 1e6) {
-    return `$${(value / 1e6).toFixed(decimals)}M`
-  } else if (value >= 1e3) {
-    return `$${(value / 1e3).toFixed(decimals)}K`
-  } else {
-    return `$${value.toFixed(decimals)}`
-  }
+export function formatUSD(value: number, decimals: number = 2): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  }).format(value)
 }
 
 export function formatPercentage(value: number | null | undefined, decimals = 2): string {
   if (value === null || value === undefined || isNaN(value)) return '0%'
   
-  // Handle values that are already percentages (> 1) vs decimals (< 1)
   const percentage = value > 1 ? value : value * 100
   return `${percentage.toFixed(decimals)}%`
 }
