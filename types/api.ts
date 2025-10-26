@@ -7,11 +7,11 @@ export interface GetPositionsParams {
 export interface Position {
   id: number;
   borrower_address: string;
+  healthfactor?: number;
   chain: string;
   token_symbol: string;  // Changed from tokensymbol
   totalcollateralusd: number;
   totaldebtusd: number;
-  healthfactor?: number;
   lowesthealthfactor?: number;
 }
 
