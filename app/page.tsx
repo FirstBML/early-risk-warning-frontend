@@ -207,39 +207,94 @@ function OverviewTab({ isDark }: any) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API_BASE}/data/quick-stats`).then(r => r.json()).catch(() => null),
-      fetch(`${API_BASE}/insights/protocol-health`).then(r => r.json()).catch(() => null),
-      fetch(`${API_BASE}/protocol_risk_summary`).then(r => r.json()).catch(() => null),
-    ]).then(([statsData, healthData, summaryData]) => {
-      setStats(statsData);
-      setHealth(healthData);
-      setSummary(summaryData);
-      setLoading(false);
-    });
+    const fetchData = async () => {
+      try {
+        const [statsData, healthData, summaryData] = await Promise.all([
+          fetch(`${API_BASE}/data/quick-stats`).then(r => r.json()),
+          fetch(`${API_BASE}/insights/protocol-health`).then(r => r.json()),
+          fetch(`${API_BASE}/protocol_risk_summary`).then(r => r.json())
+        ]);
+
+        setStats(statsData);
+        setHealth(healthData);
+        setSummary(summaryData);
+      } catch (error) {
+        console.error('Failed to fetch overview data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Positions" value={formatNumber(stats?.positions)} icon={Users} loading={loading} isDark={isDark} />
-        <StatCard title="Total Collateral" value={formatNumber(stats?.total_collateral_usd, 'currency')} icon={Database} loading={loading} isDark={isDark} />
-        <StatCard title="At-Risk Positions" value={formatNumber(stats?.at_risk_positions)} icon={AlertTriangle} trend={stats?.at_risk_positions > 10 ? "High risk detected" : "Normal"} loading={loading} isDark={isDark} />
-        <StatCard title="Critical Positions" value={formatNumber(stats?.critical_positions)} icon={Shield} loading={loading} isDark={isDark} />
+        <StatCard 
+          title="Total Positions" 
+          value={formatNumber(stats?.positions)} 
+          icon={Users} 
+          loading={loading} 
+          isDark={isDark} 
+        />
+        <StatCard 
+          title="Total Collateral" 
+          value={formatNumber(stats?.total_collateral_usd, 'currency')} 
+          icon={Database} 
+          loading={loading} 
+          isDark={isDark} 
+        />
+        <StatCard 
+          title="At-Risk Positions" 
+          value={formatNumber(stats?.at_risk_positions)} 
+          icon={AlertTriangle} 
+          trend={stats?.at_risk_positions > 10 ? "High risk detected" : "Normal"} 
+          loading={loading} 
+          isDark={isDark} 
+        />
+        <StatCard 
+          title="Critical Positions" 
+          value={formatNumber(stats?.critical_positions)} 
+          icon={Shield} 
+          loading={loading} 
+          isDark={isDark} 
+        />
       </div>
 
+      {/* Health Metrics Section */}
       <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>Health Metrics</h2>
+        <h2 className={`text-lg font-semibold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          Health Metrics
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <GaugeChart value={health?.health_score?.score || 0} max={100} label="Health Score" isDark={isDark} />
-          <GaugeChart value={(summary?.protocol_ltv || 0) * 100} max={100} label="Protocol LTV %" isDark={isDark} />
-          <GaugeChart value={Math.min((summary?.average_health_factor || 0) * 20, 100)} max={100} label="Avg Health Factor" isDark={isDark} />
+          <GaugeChart 
+            value={health?.health_score?.score || 0} 
+            max={100} 
+            label="Health Score" 
+            isDark={isDark} 
+          />
+          <GaugeChart 
+            value={(summary?.protocol_ltv || 0) * 100} 
+            max={100} 
+            label="Protocol LTV %" 
+            isDark={isDark} 
+          />
+          <GaugeChart 
+            value={Math.min((summary?.average_health_factor || 0) * 20, 100)} 
+            max={100} 
+            label="Avg Health Factor" 
+            isDark={isDark} 
+          />
         </div>
       </div>
 
+      {/* Summary Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Protocol Summary</h3>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Protocol Summary
+          </h3>
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Total Debt</span>
@@ -263,11 +318,18 @@ function OverviewTab({ isDark }: any) {
         </div>
 
         <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Risk Distribution</h3>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Risk Distribution
+          </h3>
           {health?.position_insights?.risk_distribution && (
             <BarChart 
-              data={Object.entries(health.position_insights.risk_distribution).map(([k, v]) => ({ category: k, count: v }))
-              xKey="category" yKey="count" isDark={isDark}
+              data={Object.entries(health.position_insights.risk_distribution).map(([k, v]) => ({ 
+                category: k, 
+                count: v 
+              }))}
+              xKey="category" 
+              yKey="count" 
+              isDark={isDark}
             />
           )}
         </div>
@@ -275,7 +337,6 @@ function OverviewTab({ isDark }: any) {
     </div>
   );
 }
-
 function PositionsTab({ isDark }: any) {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -880,7 +941,6 @@ function MetricsTab({ isDark }: { isDark: boolean }) {
       .then(r => r.json())
       .then((data) => {
         const metricsArray = data.metrics || [];
-        // Filter out zero exposures
         const filteredMetrics = metricsArray.filter((m: any) => m.total_exposure_usd > 0);
         setMetrics(filteredMetrics);
         setLoading(false);
