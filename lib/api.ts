@@ -1,16 +1,28 @@
-import { API_BASE } from '@/config/constants';
 import { GetPositionsParams, Position, RiskSignal } from '@/types/api';
 
-export const apiService = {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://easygoing-charm-production-707b.up.railway.app/api';
+
+interface ApiService {
+  getPositions(params: GetPositionsParams): Promise<Position[]>;
+  getBorrowerRiskSignals(address: string): Promise<{ signals: RiskSignal[] }>;
+}
+
+export const apiService: ApiService = {
   getPositions: async ({ borrowerAddress, limit = 100, offset = 0 }: GetPositionsParams): Promise<Position[]> => {
     const response = await fetch(
       `${API_BASE}/positions?borrower_address=${borrowerAddress}&limit=${limit}&offset=${offset}`
     );
+    if (!response.ok) {
+      throw new Error('Failed to fetch positions');
+    }
     return response.json();
   },
-
+  
   getBorrowerRiskSignals: async (address: string): Promise<{ signals: RiskSignal[] }> => {
     const response = await fetch(`${API_BASE}/borrower/risk-signals?address=${address}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch risk signals');
+    }
     return response.json();
   }
 };
