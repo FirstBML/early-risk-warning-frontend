@@ -30,7 +30,7 @@ export function CollateralVsDebtChart() {
     const fetchData = async () => {
       try {
         const result = await apiService.getCrossChainRiskComparison()
-        const chartData = result.map(item => ({
+        const chartData = result.map((item: CrossChainRiskData) => ({
           chain: item.chain,
           collateral: item.total_collateral_usd,
           debt: item.total_debt_usd

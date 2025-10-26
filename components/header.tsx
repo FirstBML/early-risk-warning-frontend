@@ -1,29 +1,32 @@
 "use client"
 
-import { Moon, Sun, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useTheme } from "@/contexts/theme-context"
 import { useState } from "react"
-import { apiService } from "@/lib/api-service"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
+import { apiService } from "@/lib/api"
+import { RefreshCw } from "lucide-react"
 
 export function Header() {
-  const { theme, toggleTheme } = useTheme()
   const [refreshing, setRefreshing] = useState(false)
   const { toast } = useToast()
 
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await apiService.refreshData()
+      const result = await apiService.refreshData()
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
       toast({
-        title: "Data refreshed",
-        description: "All data has been updated successfully",
+        title: result.success ? "Data refreshed" : "Error",
+        description: result.message || "Data has been updated",
+        variant: result.success ? "default" : "destructive",
       })
     } catch (error) {
+      console.error('Refresh failed:', error)
       toast({
-        title: "Refresh failed",
-        description: "Failed to refresh data. Please try again.",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to refresh data",
         variant: "destructive",
       })
     } finally {
@@ -32,27 +35,18 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <span className="text-xl font-bold">A</span>
-          </div>
-          <div>
-            <h1 className="text-lg font-bold">Aave Risk Monitor</h1>
-            <p className="text-xs text-muted-foreground">Early Warning System</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          </Button>
-
-          <Button variant="outline" size="icon" onClick={toggleTheme}>
-            {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-          </Button>
-        </div>
+    <header className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center space-x-4">
+        <h1 className="text-xl font-semibold">AAVE Risk Dashboard</h1>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          disabled={refreshing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing...' : 'Refresh Data'}
+        </Button>
       </div>
     </header>
   )
