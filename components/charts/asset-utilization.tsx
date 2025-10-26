@@ -2,22 +2,23 @@
 
 import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { apiService } from "@/lib/api-service"
+import { apiService } from "@/lib/api"
 import { formatPercentage } from "@/lib/formatters"
+import { Reserve } from "@/types/api"
 
 export function AssetUtilization() {
-  const [reserves, setReserves] = useState<any[]>([])
+  const [reserves, setReserves] = useState<Reserve[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const result = await apiService.getReserves()
-        const withUtilization = result.map((r: any) => ({
+        const withUtilization = result.map((r: Reserve) => ({
           ...r,
           utilization: r.borrow_apy / (r.supply_apy + r.borrow_apy + 0.01) || 0,
         }))
-        const sorted = withUtilization.sort((a: any, b: any) => b.utilization - a.utilization).slice(0, 10)
+        const sorted = withUtilization.sort((a, b) => (b.utilization || 0) - (a.utilization || 0)).slice(0, 10)
         setReserves(sorted)
       } catch (error) {
         console.error("[v0] Failed to fetch reserves:", error)

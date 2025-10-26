@@ -23,3 +23,12 @@ export interface RiskSignal {
   timestamp: string;
   recommendedAction?: string;  // Changed from recommendedaction
 }
+
+export interface Reserve {
+  token_symbol: string;
+  supply_apy: number;
+  borrow_apy: number;
+  total_supply: number;
+  total_borrow: number;
+  utilization?: number;
+}
