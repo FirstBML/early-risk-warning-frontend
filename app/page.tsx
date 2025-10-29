@@ -1,19 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, AlertTriangle, BarChart3, TrendingUp, Shield, Database, Globe, Moon, Sun, Zap, Users, RefreshCw, ChevronLeft, ChevronRight, Lock, Wallet } from 'lucide-react';
+import { Activity, AlertTriangle, BarChart3, TrendingUp, Shield, Database, Globe, Moon, Sun, Zap, Users, RefreshCw, ChevronLeft, ChevronRight, Lock, Wallet, PieChart } from 'lucide-react';
 import { StatCard } from './components/StatCard';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://easygoing-charm-production-707b.up.railway.app/api';
 
-// Global number formatter
+// FIXED: Global number formatter - NO abbreviations, always full numbers with commas
 function formatNumber(value: number | null | undefined, type: 'currency' | 'number' = 'number'): string {
-  if (!value || value === 0) return type === 'currency' ? '$0.00' : '0';
+  if (value === null || value === undefined || value === 0) {
+    return type === 'currency' ? '$0.00' : '0';
+  }
   
   if (type === 'currency') {
-    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-    if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
     return `$${value.toLocaleString(undefined, { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2
@@ -35,7 +34,20 @@ const tabs = [
   { id: 'security', label: 'Security', icon: Lock },
 ];
 
-// Pagination Component
+// FIXED: Unified refresh function
+async function unifiedRefresh() {
+  try {
+    const response = await fetch(`${API_BASE}/data/refresh?password=${encodeURIComponent('admin123')}&refresh_reserves=true&refresh_positions=true&refresh_liquidations=true`, {
+      method: 'POST'
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Refresh failed:', error);
+    throw error;
+  }
+}
+
+// FIXED: Pagination Component - Max 10 rows per page
 function Pagination({ currentPage, totalPages, onPageChange, isDark }: any) {
   return (
     <div className={`flex items-center justify-between mt-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -128,31 +140,141 @@ interface BarChartProps {
   xKey: string;
   yKey: string;
   isDark: boolean;
+  title?: string;
 }
 
-function BarChart({ data, xKey, yKey, isDark }: BarChartProps) {
-  if (!data || data.length === 0) return null;
+function BarChart({ data, xKey, yKey, isDark, title }: BarChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+        No data available for chart
+      </div>
+    );
+  }
+  
   const maxValue = Math.max(...data.map((d: any) => d[yKey] || 0));
   
   return (
-    <div className="space-y-2">
-      {data.slice(0, 5).map((item: any, idx: number) => {
-        const percentage = maxValue > 0 ? ((item[yKey] || 0) / maxValue) * 100 : 0;
-        return (
-          <div key={idx} className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>{item[xKey]}</span>
-              <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>{item[yKey]}</span>
+    <div className="space-y-3">
+      {title && (
+        <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{title}</h4>
+      )}
+      <div className="space-y-2">
+        {data.slice(0, 8).map((item: any, idx: number) => {
+          const percentage = maxValue > 0 ? ((item[yKey] || 0) / maxValue) * 100 : 0;
+          return (
+            <div key={idx} className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>{item[xKey]}</span>
+                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                  {formatNumber(item[yKey])}
+                </span>
+              </div>
+              <div className={`w-full h-2 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+                <div 
+                  className="h-full bg-blue-600 rounded-full transition-all duration-500" 
+                  style={{ width: `${percentage}%` }} 
+                />
+              </div>
             </div>
-            <div className={`w-full h-2 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
-              <div 
-                className="h-full bg-blue-600 rounded-full transition-all duration-500" 
-                style={{ width: `${percentage}%` }} 
-              />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// NEW: Pie Chart Component
+function PieChartComponent({ data, isDark, title }: any) {
+  if (!data || data.length === 0) {
+    return (
+      <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+        No data available for chart
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum: number, item: any) => sum + (item.value || 0), 0);
+  const colors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4'];
+
+  let currentAngle = 0;
+  const segments = data.map((item: any, index: number) => {
+    const percentage = (item.value / total) * 100;
+    const angle = (percentage / 100) * 360;
+    const segment = {
+      ...item,
+      percentage,
+      startAngle: currentAngle,
+      endAngle: currentAngle + angle,
+      color: colors[index % colors.length]
+    };
+    currentAngle += angle;
+    return segment;
+  });
+
+  return (
+    <div className="space-y-4">
+      {title && (
+        <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{title}</h4>
+      )}
+      <div className="flex items-center justify-center">
+        <div className="relative w-48 h-48">
+          <svg viewBox="0 0 100 100" className="transform -rotate-90">
+            {segments.map((segment: any, index: number) => {
+              const startX = 50 + 40 * Math.cos((segment.startAngle * Math.PI) / 180);
+              const startY = 50 + 40 * Math.sin((segment.startAngle * Math.PI) / 180);
+              const endX = 50 + 40 * Math.cos((segment.endAngle * Math.PI) / 180);
+              const endY = 50 + 40 * Math.sin((segment.endAngle * Math.PI) / 180);
+              const largeArcFlag = segment.endAngle - segment.startAngle > 180 ? 1 : 0;
+
+              const pathData = [
+                `M 50 50`,
+                `L ${startX} ${startY}`,
+                `A 40 40 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                `Z`
+              ].join(' ');
+
+              return (
+                <path
+                  key={index}
+                  d={pathData}
+                  fill={segment.color}
+                  stroke={isDark ? '#1f2937' : '#ffffff'}
+                  strokeWidth="1"
+                />
+              );
+            })}
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <div className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {total.toLocaleString()}
+              </div>
+              <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                Total
+              </div>
             </div>
           </div>
-        );
-      })}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {segments.map((segment: any, index: number) => (
+          <div key={index} className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded" 
+                style={{ backgroundColor: segment.color }}
+              />
+              <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>
+                {segment.name}
+              </span>
+            </div>
+            <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+              {segment.percentage.toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -200,36 +322,76 @@ function DataTable({ data, columns, loading, isDark }: any) {
   );
 }
 
+// FIXED: Overview Tab with proper health score and risk distribution
 function OverviewTab({ isDark }: any) {
   const [stats, setStats] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [statsData, healthData, summaryData] = await Promise.all([
+        fetch(`${API_BASE}/data/quick-stats`).then(r => r.json()),
+        fetch(`${API_BASE}/insights/protocol-health`).then(r => r.json()),
+        fetch(`${API_BASE}/protocol_risk_summary`).then(r => r.json())
+      ]);
+
+      setStats(statsData);
+      setHealth(healthData);
+      setSummary(summaryData);
+    } catch (error) {
+      console.error('Failed to fetch overview data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, healthData, summaryData] = await Promise.all([
-          fetch(`${API_BASE}/data/quick-stats`).then(r => r.json()),
-          fetch(`${API_BASE}/insights/protocol-health`).then(r => r.json()),
-          fetch(`${API_BASE}/protocol_risk_summary`).then(r => r.json())
-        ]);
-
-        setStats(statsData);
-        setHealth(healthData);
-        setSummary(summaryData);
-      } catch (error) {
-        console.error('Failed to fetch overview data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, []);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await unifiedRefresh();
+      await fetchData();
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // FIXED: Calculate health score from data
+  const healthScore = health?.health_score?.score || 
+    (summary ? Math.max(0, Math.min(100, 100 - (summary.at_risk_percentage || 0))) : 0);
+
+  // FIXED: Get risk distribution data
+  const riskDistribution = health?.position_insights?.risk_distribution || 
+    health?.chain_breakdown?.risk_distribution || 
+    { SAFE: 0, LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+
+  const hasRiskData = Object.keys(riskDistribution).length > 0;
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Protocol Overview</h2>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className={`flex items-center gap-2 px-4 py-2 rounded ${
+            isDark ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
+          } text-white disabled:opacity-50`}
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing...' : 'Refresh Data'}
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Positions" 
@@ -262,14 +424,14 @@ function OverviewTab({ isDark }: any) {
         />
       </div>
 
-      {/* Health Metrics Section */}
+      {/* Health Metrics Section - FIXED */}
       <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
         <h2 className={`text-lg font-semibold mb-6 ${isDark ? 'text-white' : 'text-gray-900'}`}>
           Health Metrics
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <GaugeChart 
-            value={health?.health_score?.score || 0} 
+            value={healthScore} 
             max={100} 
             label="Health Score" 
             isDark={isDark} 
@@ -289,8 +451,8 @@ function OverviewTab({ isDark }: any) {
         </div>
       </div>
 
-      {/* Summary Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Summary Section with Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
           <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Protocol Summary
@@ -321,22 +483,48 @@ function OverviewTab({ isDark }: any) {
           <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Risk Distribution
           </h3>
-          {health?.position_insights?.risk_distribution && (
-            <BarChart 
-              data={Object.entries(health.position_insights.risk_distribution).map(([k, v]) => ({ 
-                category: k, 
-                count: v 
+          {hasRiskData ? (
+            <PieChartComponent 
+              data={Object.entries(riskDistribution).map(([name, value]) => ({ 
+                name, 
+                value: value as number 
               }))}
-              xKey="category" 
-              yKey="count" 
               isDark={isDark}
             />
+          ) : (
+            <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Loading risk data...
+            </div>
+          )}
+        </div>
+
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Chain Distribution
+          </h3>
+          {health?.chain_breakdown ? (
+            <BarChart 
+              data={Object.entries(health.chain_breakdown).map(([chain, data]: [string, any]) => ({ 
+                chain, 
+                positions: data.positions || 0 
+              }))}
+              xKey="chain" 
+              yKey="positions" 
+              isDark={isDark}
+              title="Positions by Chain"
+            />
+          ) : (
+            <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Loading chain data...
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 }
+
+// FIXED: Positions Tab with full addresses and charts
 function PositionsTab({ isDark }: any) {
   const [positions, setPositions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -345,7 +533,7 @@ function PositionsTab({ isDark }: any) {
   const [viewMode, setViewMode] = useState<'detailed' | 'summary'>('detailed');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10; // FIXED: Max 10 rows per page
 
   useEffect(() => {
     setLoading(true);
@@ -381,13 +569,21 @@ function PositionsTab({ isDark }: any) {
       });
   }, [filter, currentPage, groupByBorrower, viewMode]);
 
+  // FIXED: Full address display
+  const displayFullAddress = (address: string) => {
+    if (!address || address === 'N/A') return 'N/A';
+    return (
+      <span className="font-mono text-xs" title={address}>
+        {address}
+      </span>
+    );
+  };
+
   const detailedColumns = groupByBorrower ? [
     { 
       key: 'borrower_address', 
       label: 'User', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 8)}...{val.slice(-6)}</span>
-      ) : 'N/A' 
+      render: (val: string) => displayFullAddress(val)
     },
     { key: 'chain', label: 'Chain' },
     { 
@@ -446,18 +642,14 @@ function PositionsTab({ isDark }: any) {
     { 
       key: 'borrower_address', 
       label: 'User', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 8)}...{val.slice(-6)}</span>
-      ) : 'N/A' 
+      render: (val: string) => displayFullAddress(val)
     },
     { key: 'chain', label: 'Chain' },
     { key: 'token_symbol', label: 'Asset' },
     { 
       key: 'token_address', 
       label: 'Token Address', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 6)}...{val.slice(-4)}</span>
-      ) : 'N/A' 
+      render: (val: string) => displayFullAddress(val)
     },
     { 
       key: 'collateral_usd', 
@@ -485,9 +677,7 @@ function PositionsTab({ isDark }: any) {
     { 
       key: 'borrower', 
       label: 'User', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 8)}...{val.slice(-6)}</span>
-      ) : 'N/A' 
+      render: (val: string) => displayFullAddress(val)
     },
     { key: 'chain', label: 'Chain' },
     { key: 'token_symbol', label: 'Asset' },
@@ -517,8 +707,35 @@ function PositionsTab({ isDark }: any) {
 
   const columns = viewMode === 'summary' ? summaryColumns : detailedColumns;
 
+  // Chart data for positions
+  const riskDistributionData = useMemo(() => {
+    const distribution = positions.reduce((acc: any, pos: any) => {
+      const risk = pos.risk_category || 'SAFE';
+      acc[risk] = (acc[risk] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([category, count]) => ({ 
+      category, 
+      count: count as number 
+    }));
+  }, [positions]);
+
+  const chainDistributionData = useMemo(() => {
+    const distribution = positions.reduce((acc: any, pos: any) => {
+      const chain = pos.chain || 'Unknown';
+      acc[chain] = (acc[chain] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([chain, count]) => ({ 
+      chain, 
+      count: count as number 
+    }));
+  }, [positions]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-wrap gap-2 items-center">
         <button 
           onClick={() => { setFilter('all'); setCurrentPage(1); }} 
@@ -564,24 +781,54 @@ function PositionsTab({ isDark }: any) {
         )}
       </div>
 
-      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          {viewMode === 'summary' ? 'Positions Summary' : 
-           filter === 'risky' ? 'Risky Positions' : 
-           groupByBorrower ? 'Positions Grouped by Borrower' : 'All Positions'}
-        </h2>
-        <DataTable data={positions} columns={columns} loading={loading} isDark={isDark} />
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6 lg:col-span-2`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            {viewMode === 'summary' ? 'Positions Summary' : 
+             filter === 'risky' ? 'Risky Positions' : 
+             groupByBorrower ? 'Positions Grouped by Borrower' : 'All Positions'}
+          </h2>
+          <DataTable data={positions} columns={columns} loading={loading} isDark={isDark} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+        </div>
+
+        <div className="space-y-6">
+          {/* Risk Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Risk Category Distribution
+            </h3>
+            <PieChartComponent 
+              data={riskDistributionData.map(item => ({ name: item.category, value: item.count }))}
+              isDark={isDark}
+            />
+          </div>
+
+          {/* Chain Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Chain Distribution
+            </h3>
+            <BarChart 
+              data={chainDistributionData}
+              xKey="chain" 
+              yKey="count" 
+              isDark={isDark}
+              title="Positions by Chain"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
+// FIXED: Reserves Tab with full addresses and chart
 function ReservesTab({ isDark }: any) {
   const [reserves, setReserves] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10; // FIXED: Max 10 rows per page
 
   useEffect(() => {
     fetch(`${API_BASE}/reserves/rpc?limit=500`)
@@ -600,6 +847,16 @@ function ReservesTab({ isDark }: any) {
   const paginatedReserves = reserves.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(reserves.length / pageSize);
 
+  // FIXED: Full address display
+  const displayFullAddress = (address: string) => {
+    if (!address || address === 'N/A') return 'N/A';
+    return (
+      <span className="font-mono text-xs" title={address}>
+        {address}
+      </span>
+    );
+  };
+
   const columns = [
     { key: 'chain', label: 'Chain' },
     { 
@@ -610,9 +867,7 @@ function ReservesTab({ isDark }: any) {
     { 
       key: 'token_address', 
       label: 'Address', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 6)}...{val.slice(-4)}</span>
-      ) : 'N/A'
+      render: (val: string) => displayFullAddress(val)
     },
     { 
       key: 'ltv', 
@@ -634,21 +889,82 @@ function ReservesTab({ isDark }: any) {
     },
   ];
 
+  // Chart data for reserves
+  const chainDistributionData = useMemo(() => {
+    const distribution = reserves.reduce((acc: any, reserve: any) => {
+      const chain = reserve.chain || 'Unknown';
+      acc[chain] = (acc[chain] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([chain, count]) => ({ 
+      chain, 
+      count: count as number 
+    }));
+  }, [reserves]);
+
+  const assetDistributionData = useMemo(() => {
+    const distribution = reserves.reduce((acc: any, reserve: any) => {
+      const asset = reserve.token_symbol || 'Unknown';
+      if (asset !== 'Unknown') {
+        acc[asset] = (acc[asset] || 0) + 1;
+      }
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution)
+      .map(([asset, count]) => ({ asset, count: count as number }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [reserves]);
+
   return (
-    <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-      <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Assets</h2>
-      <DataTable data={paginatedReserves} columns={columns} loading={loading} isDark={isDark} />
-      <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6 lg:col-span-2`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Assets</h2>
+          <DataTable data={paginatedReserves} columns={columns} loading={loading} isDark={isDark} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+        </div>
+
+        <div className="space-y-6">
+          {/* Chain Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Reserves by Chain
+            </h3>
+            <PieChartComponent 
+              data={chainDistributionData.map(item => ({ name: item.chain, value: item.count }))}
+              isDark={isDark}
+            />
+          </div>
+
+          {/* Asset Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Top Assets
+            </h3>
+            <BarChart 
+              data={assetDistributionData}
+              xKey="asset" 
+              yKey="count" 
+              isDark={isDark}
+              title="Assets by Count"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
+// FIXED: Liquidations Tab with proper data display
 function LiquidationsTab({ isDark }: any) {
   const [liquidations, setLiquidations] = useState<any[]>([]);
   const [trends, setTrends] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10;
 
   useEffect(() => {
     Promise.all([
@@ -689,25 +1005,102 @@ function LiquidationsTab({ isDark }: any) {
     },
   ];
 
+  // Chart data for liquidations
+  const chainDistributionData = useMemo(() => {
+    const distribution = liquidations.reduce((acc: any, liq: any) => {
+      const chain = liq.chain || 'Unknown';
+      acc[chain] = (acc[chain] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([chain, count]) => ({ 
+      chain, 
+      count: count as number 
+    }));
+  }, [liquidations]);
+
+  const collateralDistributionData = useMemo(() => {
+    const distribution = liquidations.reduce((acc: any, liq: any) => {
+      const collateral = liq.collateral_symbol || 'Unknown';
+      if (collateral !== 'Unknown') {
+        acc[collateral] = (acc[collateral] || 0) + 1;
+      }
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution)
+      .map(([collateral, count]) => ({ collateral, count: count as number }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [liquidations]);
+
   return (
     <div className="space-y-6">
+      {/* FIXED: Trends display with proper formatting */}
       {trends && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="24h Liquidations" value={formatNumber(trends.liquidations_24h)} icon={AlertTriangle} loading={loading} isDark={isDark} />
-          <StatCard title="24h Volume" value={formatNumber(trends.liquidation_volume_usd_24h, 'currency')} loading={loading} isDark={isDark} />
-          <StatCard title="7d Daily Average" value={trends.daily_average_7d?.toFixed(1) || '0.0'} trend={trends.trend || 'STABLE'} loading={loading} isDark={isDark} />
+          <StatCard 
+            title="24h Liquidations" 
+            value={formatNumber(trends.liquidations_24h || 0)} 
+            icon={AlertTriangle} 
+            loading={loading} 
+            isDark={isDark} 
+          />
+          <StatCard 
+            title="24h Volume" 
+            value={formatNumber(trends.liquidation_volume_usd_24h || 0, 'currency')} 
+            loading={loading} 
+            isDark={isDark} 
+          />
+          <StatCard 
+            title="7d Daily Average" 
+            value={trends.daily_average_7d ? formatNumber(trends.daily_average_7d) : '0'} 
+            trend={trends.trend || 'STABLE'} 
+            loading={loading} 
+            isDark={isDark} 
+          />
         </div>
       )}
 
-      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Recent Liquidations</h2>
-        <DataTable data={paginatedLiquidations} columns={columns} loading={loading} isDark={isDark} />
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6 lg:col-span-2`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Recent Liquidations</h2>
+          <DataTable data={paginatedLiquidations} columns={columns} loading={loading} isDark={isDark} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />
+        </div>
+
+        <div className="space-y-6">
+          {/* Chain Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Liquidations by Chain
+            </h3>
+            <PieChartComponent 
+              data={chainDistributionData.map(item => ({ name: item.chain, value: item.count }))}
+              isDark={isDark}
+            />
+          </div>
+
+          {/* Collateral Distribution Chart */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Top Collateral Assets
+            </h3>
+            <BarChart 
+              data={collateralDistributionData}
+              xKey="collateral" 
+              yKey="count" 
+              isDark={isDark}
+              title="Liquidations by Collateral"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
+// FIXED: Risk Tab with proper data display
 function RiskTab({ isDark }: any) {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [signals, setSignals] = useState<any[]>([]);
@@ -716,9 +1109,9 @@ function RiskTab({ isDark }: any) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_BASE}/risk_alerts_feed`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/risk_alerts_feed?password=admin123`).then(r => r.json()).catch(() => []),
       fetch(`${API_BASE}/borrower_risk_signals`).then(r => r.json()).catch(() => ({ signals: [] })),
-      fetch(`${API_BASE}/positions`).then(r => r.json()).catch(() => []),
+      fetch(`${API_BASE}/positions?limit=100`).then(r => r.json()).catch(() => []),
     ]).then(([alertData, signalData, posData]) => {
       const alertArray = Array.isArray(alertData) ? alertData : (alertData.alerts || alertData.data || []);
       setAlerts(alertArray);
@@ -745,33 +1138,61 @@ function RiskTab({ isDark }: any) {
     }));
   }, [positions]);
 
+  // FIXED: Proper signal display with details
+  const enhancedSignals = useMemo(() => {
+    if (!signals.length) return [];
+    
+    return signals.map((signal: any) => ({
+      ...signal,
+      title: signal.title || `Risk Signal - ${signal.urgency || 'MEDIUM'}`,
+      description: signal.description || 
+        `Health Factor: ${signal.current_health_factor || 'N/A'}, LTV: ${(signal.borrower_ltv * 100)?.toFixed(1) || 'N/A'}%`,
+      details: `Collateral: ${formatNumber(signal.collateral_usd, 'currency')}, Debt: ${formatNumber(signal.debt_usd, 'currency')}`
+    }));
+  }, [signals]);
+
   return (
     <div className="space-y-6">
-      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Position Risk Categories</h2>
-        {loading ? (
-          <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className={`h-8 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
-        ) : (
-          <div className="space-y-4">
-            {riskDistribution.map((cat: any, idx: number) => (
-              <ProgressBar key={idx} value={cat.percentage} max={100} label={`${cat.name}: ${cat.value} positions`} isDark={isDark} />
-            ))}
-          </div>
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Position Risk Categories</h2>
+          {loading ? (
+            <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className={`h-8 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+          ) : (
+            <div className="space-y-4">
+              {riskDistribution.map((cat: any, idx: number) => (
+                <ProgressBar key={idx} value={cat.percentage} max={100} label={`${cat.name}: ${cat.value} positions`} isDark={isDark} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Risk Distribution</h2>
+          {loading ? (
+            <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className={`h-8 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+          ) : (
+            <PieChartComponent 
+              data={riskDistribution.map(item => ({ name: item.name, value: item.value }))}
+              isDark={isDark}
+            />
+          )}
+        </div>
       </div>
 
       <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
         <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Borrower Risk Signals</h2>
         {loading ? (
           <div className="space-y-2">{[1, 2].map(i => <div key={i} className={`h-16 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
-        ) : signals.length > 0 ? (
+        ) : enhancedSignals.length > 0 ? (
           <div className="space-y-3">
-            {signals.slice(0, 5).map((signal: any, idx: number) => (
+            {enhancedSignals.slice(0, 5).map((signal: any, idx: number) => (
               <div key={idx} className={`border-l-4 ${signal.urgency === 'CRITICAL' ? 'border-red-500' : signal.urgency === 'HIGH' ? 'border-orange-500' : 'border-yellow-500'} ${isDark ? 'bg-gray-700' : 'bg-gray-100'} p-4 rounded`}>
                 <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{signal.title || 'Risk Signal'}</h4>
-                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{signal.description || 'No details'}</p>
+                  <div className="flex-1">
+                    <h4 className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{signal.title}</h4>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{signal.description}</p>
+                    <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} mt-1`}>{signal.details}</p>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs ${signal.urgency === 'CRITICAL' ? 'bg-red-100 text-red-800' : signal.urgency === 'HIGH' ? 'bg-orange-100 text-orange-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     {signal.urgency}
@@ -814,6 +1235,254 @@ function RiskTab({ isDark }: any) {
   );
 }
 
+// FIXED: Portfolio Tab with assets breakdown
+function PortfolioTab({ isDark }: any) {
+  const [walletAddress, setWalletAddress] = useState('');
+  const [portfolio, setPortfolio] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'fast' | 'full'>('fast');
+
+  const handleFetch = async () => {
+    if (!walletAddress || walletAddress.length !== 42) {
+      alert('Please enter a valid wallet address (42 characters starting with 0x)');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const endpoint = mode === 'fast' ? '/v2/portfolio/view-fast' : '/v2/portfolio/view';
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet_address: walletAddress,
+          chains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base', 'avalanche']
+        })
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch portfolio');
+      
+      const data = await response.json();
+      setPortfolio(data);
+    } catch (error: any) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // FIXED: Assets breakdown display
+  const renderAssetsBreakdown = (chainDetails: any) => {
+    if (!chainDetails) return null;
+
+    return Object.entries(chainDetails).map(([chain, data]: [string, any]) => {
+      if (!data.has_positions) return null;
+
+      const collateralAssets = data.collateral_assets || [];
+      const debtAssets = data.debt_assets || [];
+
+      return (
+        <div key={chain} className={`border ${isDark ? 'border-gray-700' : 'border-gray-200'} rounded-lg p-4 mb-4`}>
+          <h4 className={`font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>{chain.toUpperCase()}</h4>
+          
+          {/* Collateral Assets */}
+          {collateralAssets.length > 0 && (
+            <div className="mb-4">
+              <h5 className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Collateral Assets</h5>
+              <div className="space-y-2">
+                {collateralAssets.map((asset: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center text-sm">
+                    <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>{asset.symbol}</span>
+                    <div className="text-right">
+                      <div className={isDark ? 'text-white' : 'text-gray-900'}>
+                        {formatNumber(asset.balance, 'number')}
+                      </div>
+                      <div className={isDark ? 'text-gray-500' : 'text-gray-500'}>
+                        {formatNumber(asset.value_usd, 'currency')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Debt Assets */}
+          {debtAssets.length > 0 && (
+            <div>
+              <h5 className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Debt Assets</h5>
+              <div className="space-y-2">
+                {debtAssets.map((asset: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center text-sm">
+                    <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>{asset.symbol}</span>
+                    <div className="text-right">
+                      <div className={isDark ? 'text-white' : 'text-gray-900'}>
+                        {formatNumber(asset.balance, 'number')}
+                      </div>
+                      <div className={isDark ? 'text-gray-500' : 'text-gray-500'}>
+                        {formatNumber(asset.value_usd, 'currency')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Portfolio Viewer</h2>
+        
+        <div className="space-y-4">
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Wallet Address
+            </label>
+            <input
+              type="text"
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              placeholder="0x..."
+              className={`w-full px-4 py-2 rounded border ${
+                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+          </div>
+
+          <div className="flex gap-4 items-center">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode('fast')}
+                className={`px-4 py-2 rounded ${mode === 'fast' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}
+              >
+                Fast Mode (2-3s)
+              </button>
+              <button
+                onClick={() => setMode('full')}
+                className={`px-4 py-2 rounded ${mode === 'full' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}
+              >
+                Full Mode (40s+)
+              </button>
+            </div>
+            
+            <button
+              onClick={handleFetch}
+              disabled={loading}
+              className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+              {loading ? 'Loading...' : 'Fetch Portfolio'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {portfolio && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard 
+              title="Total Collateral" 
+              value={formatNumber(portfolio.total_metrics?.total_collateral_usd, 'currency')} 
+              isDark={isDark} 
+            />
+            <StatCard 
+              title="Total Debt" 
+              value={formatNumber(portfolio.total_metrics?.total_debt_usd, 'currency')} 
+              isDark={isDark} 
+            />
+            <StatCard 
+              title="Health Factor" 
+              value={portfolio.total_metrics?.lowest_health_factor?.toFixed(2) || 'N/A'} 
+              isDark={isDark} 
+            />
+            <StatCard 
+              title="Net Worth" 
+              value={formatNumber(portfolio.total_metrics?.total_net_worth_usd, 'currency')} 
+              isDark={isDark} 
+            />
+          </div>
+
+          {/* FIXED: Assets Breakdown */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Assets Breakdown {mode === 'fast' && '(Fast Mode - Limited Details)'}
+            </h3>
+            {mode === 'full' && portfolio.chain_details ? (
+              <div className="space-y-4">
+                {renderAssetsBreakdown(portfolio.chain_details)}
+              </div>
+            ) : (
+              <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                {mode === 'fast' 
+                  ? 'Switch to Full Mode to see detailed asset breakdown'
+                  : 'No asset breakdown data available'
+                }
+              </div>
+            )}
+          </div>
+
+          {/* Portfolio Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Chain Distribution */}
+            <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Portfolio by Chain
+              </h3>
+              {portfolio.chain_details ? (
+                <PieChartComponent 
+                  data={Object.entries(portfolio.chain_details)
+                    .filter(([_, data]: [string, any]) => data.has_positions)
+                    .map(([chain, data]: [string, any]) => ({ 
+                      name: chain, 
+                      value: data.account_data?.total_collateral_usd || 0 
+                    }))}
+                  isDark={isDark}
+                />
+              ) : (
+                <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  No chain distribution data
+                </div>
+              )}
+            </div>
+
+            {/* Risk Distribution */}
+            <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Risk Distribution
+              </h3>
+              {portfolio.risk_assessment ? (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold mb-2 ${
+                      portfolio.risk_assessment.overall_risk_level === 'CRITICAL' ? 'text-red-600' :
+                      portfolio.risk_assessment.overall_risk_level === 'MEDIUM' ? 'text-yellow-600' : 'text-green-600'
+                    }`}>
+                      {portfolio.risk_assessment.overall_risk_level}
+                    </div>
+                    <div className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                      Risk Score: {portfolio.risk_assessment.risk_score || 0}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  No risk assessment data
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// FIXED: Chains Tab with proper filtering
 function ChainsTab({ isDark }: any) {
   const [chains, setChains] = useState<any[]>([]);
   const [comparison, setComparison] = useState<any[]>([]);
@@ -824,6 +1493,7 @@ function ChainsTab({ isDark }: any) {
       fetch(`${API_BASE}/chains/available`).then(r => r.json()).catch(() => ({ chains: [] })),
       fetch(`${API_BASE}/crosschain_risk_comparison`).then(r => r.json()).catch(() => ({ comparison: [] })),
     ]).then(([chainsData, compData]) => {
+      // FIXED: Only show supported chains
       const SUPPORTED_CHAINS = ['ethereum', 'avalanche', 'polygon', 'arbitrum', 'optimism', 'base'];
       
       const chainArray = (chainsData.chains || []).filter(
@@ -926,15 +1596,61 @@ function ChainsTab({ isDark }: any) {
           <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No comparison data available</p>
         )}
       </div>
+
+      {/* Charts for Chains Tab */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Positions by Chain
+          </h3>
+          {comparison.length > 0 ? (
+            <BarChart 
+              data={comparison.map((item: any) => ({ 
+                chain: item.chain, 
+                positions: item.total_positions || 0 
+              }))}
+              xKey="chain" 
+              yKey="positions" 
+              isDark={isDark}
+            />
+          ) : (
+            <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              No comparison data
+            </div>
+          )}
+        </div>
+
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Safety Score Distribution
+          </h3>
+          {comparison.length > 0 ? (
+            <BarChart 
+              data={comparison.map((item: any) => ({ 
+                chain: item.chain, 
+                score: item.safety_score || 0 
+              }))}
+              xKey="chain" 
+              yKey="score" 
+              isDark={isDark}
+            />
+          ) : (
+            <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              No comparison data
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
+// FIXED: Metrics Tab with proper data display
 function MetricsTab({ isDark }: { isDark: boolean }) {
   const [metrics, setMetrics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 10;
 
   useEffect(() => {
     fetch(`${API_BASE}/reserve_risk_metrics`)
@@ -954,15 +1670,23 @@ function MetricsTab({ isDark }: { isDark: boolean }) {
   const paginatedMetrics = metrics.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(metrics.length / pageSize);
 
+  // FIXED: Full address display
+  const displayFullAddress = (address: string) => {
+    if (!address || address === 'N/A') return 'N/A';
+    return (
+      <span className="font-mono text-xs" title={address}>
+        {address}
+      </span>
+    );
+  };
+
   const columns = [
     { key: 'token_symbol', label: 'Asset' },
     { key: 'chain', label: 'Chain' },
     { 
       key: 'token_address', 
       label: 'Address', 
-      render: (val: string) => val ? (
-        <span className="font-mono text-xs" title={val}>{val.slice(0, 6)}...{val.slice(-4)}</span>
-      ) : 'N/A'
+      render: (val: string) => displayFullAddress(val)
     },
     { 
       key: 'utilization_rate', 
@@ -992,178 +1716,144 @@ function MetricsTab({ isDark }: { isDark: boolean }) {
     },
   ];
 
-  return (
-    <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-      <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Risk Metrics</h2>
-      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-4`}>
-        Advanced risk analysis for reserve assets with active exposure
-      </p>
-      {metrics.length === 0 && !loading ? (
-        <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No metrics available</p>
-      ) : (
-        <>
-          <DataTable data={paginatedMetrics} columns={columns} loading={loading} isDark={isDark} />
-          {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />}
-        </>
-      )}
-    </div>
-  );
-}
+  // Chart data for metrics
+  const riskDistributionData = useMemo(() => {
+    const distribution = metrics.reduce((acc: any, metric: any) => {
+      const level = metric.risk_level || 'LOW';
+      acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([level, count]) => ({ 
+      level, 
+      count: count as number 
+    }));
+  }, [metrics]);
 
-function PortfolioTab({ isDark }: any) {
-  const [walletAddress, setWalletAddress] = useState('');
-  const [portfolio, setPortfolio] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'fast' | 'full'>('fast');
-
-  const handleFetch = async () => {
-    if (!walletAddress || walletAddress.length !== 42) {
-      alert('Please enter a valid wallet address (42 characters starting with 0x)');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const endpoint = mode === 'fast' ? '/v2/portfolio/view-fast' : '/v2/portfolio/view';
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet_address: walletAddress,
-          chains: ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base', 'avalanche']
-        })
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch portfolio');
-      
-      const data = await response.json();
-      setPortfolio(data);
-    } catch (error: any) {
-      alert('Error: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const chainDistributionData = useMemo(() => {
+    const distribution = metrics.reduce((acc: any, metric: any) => {
+      const chain = metric.chain || 'Unknown';
+      acc[chain] = (acc[chain] || 0) + 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(distribution).map(([chain, count]) => ({ 
+      chain, 
+      count: count as number 
+    }));
+  }, [metrics]);
 
   return (
     <div className="space-y-6">
-      <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-        <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Portfolio Viewer</h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-              Wallet Address
-            </label>
-            <input
-              type="text"
-              value={walletAddress}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              placeholder="0x..."
-              className={`w-full px-4 py-2 rounded border ${
-                isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6 lg:col-span-2`}>
+          <h2 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Reserve Risk Metrics</h2>
+          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'} mb-4`}>
+            Advanced risk analysis for reserve assets with active exposure
+          </p>
+          {metrics.length === 0 && !loading ? (
+            <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No metrics available</p>
+          ) : (
+            <>
+              <DataTable data={paginatedMetrics} columns={columns} loading={loading} isDark={isDark} />
+              {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} isDark={isDark} />}
+            </>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          {/* Risk Level Distribution */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Risk Level Distribution
+            </h3>
+            {loading ? (
+              <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className={`h-4 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+            ) : (
+              <PieChartComponent 
+                data={riskDistributionData.map(item => ({ name: item.level, value: item.count }))}
+                isDark={isDark}
+              />
+            )}
           </div>
 
-          <div className="flex gap-4 items-center">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setMode('fast')}
-                className={`px-4 py-2 rounded ${mode === 'fast' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}
-              >
-                Fast Mode (2-3s)
-              </button>
-              <button
-                onClick={() => setMode('full')}
-                className={`px-4 py-2 rounded ${mode === 'full' ? 'bg-blue-600 text-white' : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-900'}`}
-              >
-                Full Mode (40s+)
-              </button>
-            </div>
-            
-            <button
-              onClick={handleFetch}
-              disabled={loading}
-              className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-              {loading ? 'Loading...' : 'Fetch Portfolio'}
-            </button>
+          {/* Chain Distribution */}
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Metrics by Chain
+            </h3>
+            {loading ? (
+              <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className={`h-4 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+            ) : (
+              <BarChart 
+                data={chainDistributionData}
+                xKey="chain" 
+                yKey="count" 
+                isDark={isDark}
+                title="Metrics Count by Chain"
+              />
+            )}
           </div>
         </div>
       </div>
 
-      {portfolio && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard 
-              title="Total Collateral" 
-              value={formatNumber(portfolio.total_metrics?.total_collateral_usd, 'currency')} 
-              isDark={isDark} 
+      {/* Additional Metrics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Top Assets by Exposure
+          </h3>
+          {loading ? (
+            <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className={`h-4 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+          ) : (
+            <BarChart 
+              data={metrics
+                .sort((a, b) => (b.total_exposure_usd || 0) - (a.total_exposure_usd || 0))
+                .slice(0, 8)
+                .map(metric => ({ 
+                  asset: metric.token_symbol, 
+                  exposure: metric.total_exposure_usd || 0 
+                }))}
+              xKey="asset" 
+              yKey="exposure" 
+              isDark={isDark}
             />
-            <StatCard 
-              title="Total Debt" 
-              value={formatNumber(portfolio.total_metrics?.total_debt_usd, 'currency')} 
-              isDark={isDark} 
-            />
-            <StatCard 
-              title="Health Factor" 
-              value={portfolio.total_metrics?.lowest_health_factor?.toFixed(2) || 'N/A'} 
-              isDark={isDark} 
-            />
-            <StatCard 
-              title="Net Worth" 
-              value={formatNumber(portfolio.total_metrics?.total_net_worth_usd, 'currency')} 
-              isDark={isDark} 
-            />
-          </div>
+          )}
+        </div>
 
-          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Chain Breakdown</h3>
-            <div className="space-y-4">
-              {Object.entries(portfolio.chain_details || {}).map(([chain, data]: [string, any]) => (
-                data.has_positions && (
-                  <div key={chain} className={`border ${isDark ? 'border-gray-700' : 'border-gray-200'} rounded-lg p-4`}>
-                    <h4 className={`font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{chain.toUpperCase()}</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <div className={isDark ? 'text-gray-400' : 'text-gray-600'}>Collateral</div>
-                        <div className={isDark ? 'text-white' : 'text-gray-900'}>{formatNumber(data.account_data?.total_collateral_usd, 'currency')}</div>
-                      </div>
-                      <div>
-                        <div className={isDark ? 'text-gray-400' : 'text-gray-600'}>Debt</div>
-                        <div className={isDark ? 'text-white' : 'text-gray-900'}>{formatNumber(data.account_data?.total_debt_usd, 'currency')}</div>
-                      </div>
-                      <div>
-                        <div className={isDark ? 'text-gray-400' : 'text-gray-600'}>Health Factor</div>
-                        <div className={isDark ? 'text-white' : 'text-gray-900'}>{data.account_data?.health_factor?.toFixed(2) || 'N/A'}</div>
-                      </div>
-                      <div>
-                        <div className={isDark ? 'text-gray-400' : 'text-gray-600'}>Risk Level</div>
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          data.account_data?.risk_level === 'CRITICAL' ? 'bg-red-100 text-red-800' :
-                          data.account_data?.risk_level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                        }`}>
-                          {data.account_data?.risk_level || 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Utilization Rates
+          </h3>
+          {loading ? (
+            <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className={`h-4 ${isDark ? 'bg-gray-700' : 'bg-gray-200'} rounded animate-pulse`}></div>)}</div>
+          ) : (
+            <BarChart 
+              data={metrics
+                .filter(metric => metric.utilization_rate > 0)
+                .sort((a, b) => (b.utilization_rate || 0) - (a.utilization_rate || 0))
+                .slice(0, 8)
+                .map(metric => ({ 
+                  asset: metric.token_symbol, 
+                  utilization: (metric.utilization_rate * 100) || 0 
+                }))}
+              xKey="asset" 
+              yKey="utilization" 
+              isDark={isDark}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
+// FIXED: Security Tab with proper functionality
 function SecurityTab({ isDark }: any) {
   const [password, setPassword] = useState('');
   const [settings, setSettings] = useState<any>(null);
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleClearCache = async () => {
     if (!password) {
@@ -1171,6 +1861,7 @@ function SecurityTab({ isDark }: any) {
       return;
     }
 
+    setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/admin/cache/clear?password=${encodeURIComponent(password)}`, {
         method: 'POST'
@@ -1185,6 +1876,8 @@ function SecurityTab({ isDark }: any) {
       }
     } catch (error: any) {
       setMessage('❌ Error: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1194,6 +1887,7 @@ function SecurityTab({ isDark }: any) {
       return;
     }
 
+    setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/admin/settings?password=${encodeURIComponent(password)}`);
       const data = await response.json();
@@ -1207,6 +1901,34 @@ function SecurityTab({ isDark }: any) {
       }
     } catch (error: any) {
       setMessage('❌ Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    if (!password) {
+      setMessage('Please enter admin password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/data/refresh?password=${encodeURIComponent(password)}&refresh_reserves=true&refresh_positions=true&refresh_liquidations=true`, {
+        method: 'POST'
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setMessage('✅ ' + (data.message || 'Refresh initiated'));
+      } else {
+        setMessage('❌ ' + (data.detail || 'Refresh failed'));
+      }
+    } catch (error: any) {
+      setMessage('❌ Error: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1231,18 +1953,30 @@ function SecurityTab({ isDark }: any) {
             />
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <button
               onClick={handleClearCache}
-              className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              disabled={loading}
+              className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
             >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Clear Cache
             </button>
             <button
               onClick={handleGetSettings}
-              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              disabled={loading}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
+              <Database className="h-4 w-4" />
               View Settings
+            </button>
+            <button
+              onClick={handleRefreshAll}
+              disabled={loading}
+              className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh All Data
             </button>
           </div>
 
@@ -1255,38 +1989,92 @@ function SecurityTab({ isDark }: any) {
       </div>
 
       {settings && (
-        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
-          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>System Settings</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Cache TTL:</span>
-              <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.cache_ttl_minutes} minutes</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Database:</span>
-              <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.database_connected ? '✅ Connected' : '❌ Disconnected'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Portfolio Service:</span>
-              <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.services_running?.portfolio_service ? '✅ Running' : '❌ Stopped'}</span>
-            </div>
-            <div className="mt-4">
-              <span className={`block mb-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Supported Chains:</span>
-              <div className="flex flex-wrap gap-2">
-                {settings.supported_chains?.map((chain: string) => (
-                  <span key={chain} className={`px-3 py-1 rounded text-sm ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
-                    {chain}
-                  </span>
-                ))}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>System Settings</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Cache TTL:</span>
+                <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.cache_ttl_minutes} minutes</span>
               </div>
+              <div className="flex justify-between">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Database:</span>
+                <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.database_connected ? '✅ Connected' : '❌ Disconnected'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Portfolio Service:</span>
+                <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.services_running?.portfolio_service ? '✅ Running' : '❌ Stopped'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Alert Service:</span>
+                <span className={isDark ? 'text-white' : 'text-gray-900'}>{settings.services_running?.alert_service ? '✅ Running' : '❌ Stopped'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Supported Chains</h3>
+            <div className="flex flex-wrap gap-2">
+              {settings.supported_chains?.map((chain: string) => (
+                <span key={chain} className={`px-3 py-1 rounded text-sm ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
+                  {chain}
+                </span>
+              ))}
             </div>
           </div>
         </div>
       )}
+
+      {/* System Status Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Service Status
+          </h3>
+          <div className="space-y-4">
+            {settings?.services_running && (
+              <PieChartComponent 
+                data={Object.entries(settings.services_running).map(([service, running]) => ({ 
+                  name: service, 
+                  value: running ? 1 : 0 
+                }))}
+                isDark={isDark}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            System Health
+          </h3>
+          <div className="space-y-4">
+            <ProgressBar 
+              value={settings?.database_connected ? 100 : 0} 
+              max={100} 
+              label="Database Connection" 
+              isDark={isDark} 
+            />
+            <ProgressBar 
+              value={settings?.cache_ttl_minutes ? 100 : 0} 
+              max={100} 
+              label="Cache Configuration" 
+              isDark={isDark} 
+            />
+            <ProgressBar 
+              value={settings?.supported_chains?.length > 0 ? 100 : 0} 
+              max={100} 
+              label="Chain Configuration" 
+              isDark={isDark} 
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
+// Main Dashboard Component (keep this at the bottom)
 export default function DeFiDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [isDark, setIsDark] = useState(false);
